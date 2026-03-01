@@ -1,0 +1,211 @@
+# Visual Diagram: Depot Isolation Architecture
+
+```
+╔════════════════════════════════════════════════════════════════════╗
+║                    PMPML DEPOT ISOLATION MODEL                     ║
+╚════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                         FULL SYSTEM VIEW                            │
+│  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐       │
+│  │  DEPOT 1  │  │  DEPOT 2  │  │  DEPOT 3  │  │  DEPOT 4  │  ...  │
+│  │ Swargate  │  │   Nigdi   │  │  Bhosari  │  │  Katraj   │       │
+│  └───────────┘  └───────────┘  └───────────┘  └───────────┘       │
+│       │              │              │              │                │
+│       ▼              ▼              ▼              ▼                │
+│  Independent    Independent    Independent    Independent          │
+│  Resources      Resources      Resources      Resources            │
+└─────────────────────────────────────────────────────────────────────┘
+
+
+╔═════════════════════════════════════════════════════════════════════╗
+║             SINGLE DEPOT VIEW: SWARGATE (DEPOT_SWGT)                ║
+╚═════════════════════════════════════════════════════════════════════╝
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │                    🏢 SWARGATE DEPOT                         │
+    │                  (18.5018°N, 73.8655°E)                     │
+    └─────────────────────────────────────────────────────────────┘
+                                │
+                ┌───────────────┼───────────────┐
+                │               │               │
+                ▼               ▼               ▼
+    ┌───────────────┐  ┌───────────────┐  ┌───────────────┐
+    │  🚌 VEHICLES   │  │  👤 DRIVERS    │  │  🗺️  ROUTES   │
+    │                │  │                │  │                │
+    │  20 Buses:     │  │  25 Drivers:   │  │  16 Routes:    │
+    │  ───────────   │  │  ────────────  │  │  ───────────   │
+    │  MH-12-5801    │  │  DRV_SWGT_001  │  │  Route 1       │
+    │  MH-12-5802    │  │  DRV_SWGT_002  │  │  Route 2       │
+    │  MH-12-5803    │  │  DRV_SWGT_003  │  │  Route 3       │
+    │  ...           │  │  ...           │  │  ...           │
+    │  MH-12-5820    │  │  DRV_SWGT_025  │  │  Route 402     │
+    │                │  │                │  │                │
+    │  ✓ AC: 9       │  │  All 8hr duty  │  │  Serving:      │
+    │  ✓ NonAC: 9    │  │                │  │  - Katraj      │
+    │  ✓ Electric: 2 │  │                │  │  - Shivajinagar│
+    │                │  │                │  │  - Hadapsar    │
+    │                │  │                │  │  - Deccan      │
+    └───────────────┘  └───────────────┘  └───────────────┘
+                                │
+                                ▼
+                    ┌───────────────────────┐
+                    │  📅 TIMETABLE          │
+                    │                        │
+                    │  575 weekday trips     │
+                    │  485 weekend trips     │
+                    │                        │
+                    │  Only on routes:       │
+                    │  1, 2, 3, 4, 5, 6,    │
+                    │  156, 157, 401, 402... │
+                    └───────────────────────┘
+
+
+╔═════════════════════════════════════════════════════════════════════╗
+║                    TSN BUILDING PROCESS                             ║
+╚═════════════════════════════════════════════════════════════════════╝
+
+STEP 1: FILTER BY DEPOT
+┌─────────────────────────────────────────────────────────────────┐
+│  SELECT * FROM routes WHERE depot_id = 'DEPOT_SWGT'             │
+│  → Result: 16 routes                                            │
+│                                                                 │
+│  SELECT * FROM vehicles WHERE depot_id = 'DEPOT_SWGT'           │
+│  → Result: 20 vehicles                                          │
+│                                                                 │
+│  SELECT * FROM drivers WHERE depot_id = 'DEPOT_SWGT'            │
+│  → Result: 25 drivers                                           │
+│                                                                 │
+│  SELECT * FROM timetable WHERE route_id IN (1,2,3,4,...)        │
+│  → Result: 575 trips                                            │
+└─────────────────────────────────────────────────────────────────┘
+
+STEP 2: BUILD TSN NODES
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  For each trip in depot's timetable:                            │
+│                                                                 │
+│    Node: (start_stop, departure_time)                           │
+│    Node: (end_stop, arrival_time)                               │
+│                                                                 │
+│  For depot location (every 5 minutes):                          │
+│                                                                 │
+│    Node: (Swargate, 06:00)                                      │
+│    Node: (Swargate, 06:05)                                      │
+│    Node: (Swargate, 06:10)                                      │
+│    ...                                                          │
+│    Node: (Swargate, 23:00)                                      │
+│                                                                 │
+│  Result: ~5,750 nodes                                           │
+└─────────────────────────────────────────────────────────────────┘
+
+STEP 3: BUILD TSN EDGES
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  Trip Edges (scheduled service):                                │
+│    575 trips × 2 (weekday+weekend) = ~1,150 edges               │
+│                                                                 │
+│  Wait Edges (vehicle/driver waiting):                           │
+│    At all stops on depot's routes: ~15,000 edges                │
+│                                                                 │
+│  Deadhead Edges (empty movement):                               │
+│    Between stops ONLY on depot routes: ~5,000 edges             │
+│                                                                 │
+│  Rest Edges (driver breaks):                                    │
+│    At Swargate depot only: ~1,850 edges                         │
+│                                                                 │
+│  Result: ~23,000 edges                                          │
+└─────────────────────────────────────────────────────────────────┘
+
+
+╔═════════════════════════════════════════════════════════════════════╗
+║                    WHAT IS NOT ALLOWED                              ║
+╚═════════════════════════════════════════════════════════════════════╝
+
+❌ CROSS-DEPOT VEHICLE USE:
+    ┌──────────┐                          ┌──────────┐
+    │ Swargate │  ──✗──>  MH-12-6001  ──✗─>│  Nigdi   │
+    │  Depot   │  (Nigdi's vehicle)       │  Depot   │
+    └──────────┘                          └──────────┘
+
+❌ CROSS-DEPOT DRIVER ASSIGNMENT:
+    ┌──────────┐                          ┌──────────┐
+    │ Swargate │  ──✗──>  DRV_NGDI_001  ──✗─>│  Nigdi   │
+    │  Route   │  (Nigdi's driver)        │  Route   │
+    └──────────┘                          └──────────┘
+
+❌ INTER-DEPOT DEADHEAD:
+    ┌──────────────┐                    ┌──────────────┐
+    │ Swargate Stn │  ──✗─> Empty  ──✗──>│  Nigdi Stn   │
+    │ (Swargate)   │        Move        │  (Nigdi)     │
+    └──────────────┘                    └──────────────┘
+
+
+✓ WHAT IS ALLOWED:
+    ┌──────────────┐                    ┌──────────────┐
+    │ Swargate Stn │  ──✓─> MH-12-5801 ──✓─>│  Katraj Stn  │
+    │ (Swargate)   │  (Swargate vehicle)  │  (Swargate)  │
+    └──────────────┘  Both on Route 1    └──────────────┘
+
+
+╔═════════════════════════════════════════════════════════════════════╗
+║               DATA VALIDATION CHECKLIST                             ║
+╚═════════════════════════════════════════════════════════════════════╝
+
+✓ Every route has depot_id
+✓ Every vehicle has depot_id
+✓ Every driver has depot_id
+✓ Every trip references a route (which has depot_id)
+✓ No duplicate vehicle_ids
+✓ No duplicate driver_ids
+✓ No orphan trips (trips without valid routes)
+✓ Foreign keys properly maintained
+✓ Each depot can operate independently
+
+
+╔═════════════════════════════════════════════════════════════════════╗
+║                  SYSTEM-WIDE SUMMARY                                ║
+╚═════════════════════════════════════════════════════════════════════╝
+
+    8 Independent Depots
+    ═══════════════════
+          ↓
+    Each depot has:
+    ───────────────
+    • Own vehicles (avg 16 per depot)
+    • Own drivers (avg 19 per depot)
+    • Own routes (avg 9 per depot)
+    • Own trips (avg 311 per depot per weekday)
+          ↓
+    TSN Builder processes each depot independently
+    ──────────────────────────────────────────────
+    • Filters data by depot_id
+    • Builds separate TSN for each depot
+    • No cross-depot edges
+    • Independent optimization
+          ↓
+    Result: 8 separate optimized plans
+    ──────────────────────────────────
+    DEPOT_SWGT_plan.json
+    DEPOT_NGDI_plan.json
+    DEPOT_BHSR_plan.json
+    DEPOT_KTRJ_plan.json
+    DEPOT_PCMC_plan.json
+    DEPOT_KNDI_plan.json
+    DEPOT_WKWD_plan.json
+    DEPOT_HDPS_plan.json
+
+
+═══════════════════════════════════════════════════════════════════════
+
+CONFIRMATION: ✅ YES, depot isolation is enforced by data structure
+
+TSN Builder should:
+1. Accept depot_id parameter
+2. Filter ALL data by depot_id
+3. Build TSN using ONLY depot's resources
+4. Validate no cross-depot references
+5. Return depot-specific optimization
+
+═══════════════════════════════════════════════════════════════════════
+```
