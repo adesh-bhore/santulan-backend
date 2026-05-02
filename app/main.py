@@ -8,10 +8,50 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
+import logging
+import os
 
 from app.config import settings
 from app.database.init_db import create_tables
 from app.api.error_handlers import register_error_handlers
+
+# DRT Phase 2: APScheduler for background jobs
+from apscheduler.schedulers.background import BackgroundScheduler
+from app.database.db import SessionLocal
+
+logger = logging.getLogger(__name__)
+
+# Global scheduler instance
+scheduler = BackgroundScheduler()
+
+
+def run_clustering_job_with_db():
+    """Wrapper to run clustering job with database session"""
+    from app.drt.clustering import ClusteringService
+    
+    db = SessionLocal()
+    try:
+        service = ClusteringService(db)
+        result = service.run_clustering_job()
+        logger.info(f"Clustering job completed: {result}")
+    except Exception as e:
+        logger.error(f"Clustering job failed: {str(e)}", exc_info=True)
+    finally:
+        db.close()
+
+
+def run_daily_analysis_with_db():
+    """Wrapper to run daily analysis job with database session"""
+    from app.drt.analysis_job import run_daily_analysis
+    
+    db = SessionLocal()
+    try:
+        result = run_daily_analysis(db)
+        logger.info(f"Daily analysis job completed: {result}")
+    except Exception as e:
+        logger.error(f"Daily analysis job failed: {str(e)}", exc_info=True)
+    finally:
+        db.close()
 
 
 @asynccontextmanager
@@ -22,12 +62,49 @@ async def lifespan(app: FastAPI):
     if settings.debug:
         print("⚠️  Debug mode enabled - creating tables if they don't exist")
         create_tables()
+    
+    # Start DRT clustering job if enabled
+    if settings.drt_clustering_enabled:
+        print(f"✓ Starting DRT clustering job (every {settings.drt_clustering_interval_minutes} minutes)")
+        scheduler.add_job(
+            run_clustering_job_with_db,
+            'interval',
+            minutes=settings.drt_clustering_interval_minutes,
+            id='drt_clustering',
+            replace_existing=True
+        )
+        scheduler.start()
+    else:
+        print("⚠️  DRT clustering disabled via config")
+    
+    # Start DRT daily analysis job if enabled (Phase 3)
+    analysis_enabled = os.getenv('DRT_ANALYSIS_JOB_ENABLED', 'True').lower() == 'true'
+    if analysis_enabled:
+        analysis_time = os.getenv('DRT_ANALYSIS_JOB_TIME', '02:00')
+        hour, minute = map(int, analysis_time.split(':'))
+        print(f"✓ Starting DRT daily analysis job (daily at {analysis_time})")
+        scheduler.add_job(
+            run_daily_analysis_with_db,
+            'cron',
+            hour=hour,
+            minute=minute,
+            id='drt_daily_analysis',
+            replace_existing=True
+        )
+        if not scheduler.running:
+            scheduler.start()
+    else:
+        print("⚠️  DRT daily analysis disabled via config")
+    
     print("✓ Application started successfully")
     
     yield
     
     # Shutdown
     print("👋 Shutting down application...")
+    if scheduler.running:
+        scheduler.shutdown()
+        print("✓ Scheduler shut down")
 
 
 # Create FastAPI application
@@ -130,6 +207,7 @@ from app.api import (
     data_routes, optimization_routes, plan_routes, driver_routes, 
     report_routes, dashboard_routes, auth_routes, duty_routes, driver_profile_routes, trip_routes
 )
+from app.drt import routes as drt_routes
 
 app.include_router(dashboard_routes.router, prefix="/api", tags=["Dashboard"])
 app.include_router(data_routes.router, prefix="/api/data", tags=["Data Upload"])
@@ -143,3 +221,89 @@ app.include_router(auth_routes.router, prefix="/api/auth", tags=["Driver App - A
 app.include_router(duty_routes.router, prefix="/api/duty", tags=["Driver App - Duty Management"])
 app.include_router(driver_profile_routes.router, prefix="/api/driver", tags=["Driver App - Profile"])
 app.include_router(trip_routes.router, prefix="/api", tags=["Driver App - Trip Management"])
+
+# DRT Ping Schedule APIs (Isolated Module)
+app.include_router(drt_routes.router, prefix="/api/drt", tags=["DRT - Ping Schedule"])
+
+
+# DRT WebSocket endpoint for real-time surge notifications
+from fastapi import WebSocket, WebSocketDisconnect, Query
+from app.drt.websocket import surge_ws_manager
+from app.services.auth_service import AuthService
+
+@app.websocket("/ws/drt/surge")
+async def websocket_surge_endpoint(
+    websocket: WebSocket,
+    token: str = Query(..., description="JWT access token"),
+    depot_id: str = Query("ALL", description="Depot ID to monitor (default: ALL)")
+):
+    """
+    WebSocket endpoint for real-time surge notifications.
+    
+    **Authentication**: Requires valid JWT token with supervisor role.
+    
+    **Parameters**:
+    - `token`: JWT access token (query parameter)
+    - `depot_id`: Depot ID to monitor (default: "ALL" for all depots)
+    
+    **Message Format**:
+    ```json
+    {
+        "type": "surge_detected",
+        "data": {
+            "surge_id": 123,
+            "stop_id": "STOP_SWGT",
+            "stop_name": "Swargate Bus Stand",
+            "route_ids": ["ROUTE_101", "ROUTE_102"],
+            "ping_count": 52,
+            "detected_at": "2024-02-25T10:30:00Z"
+        },
+        "timestamp": "2024-02-25T10:30:00Z"
+    }
+    ```
+    
+    **Keep-alive**: Server sends ping every 30 seconds. Client should respond with pong.
+    """
+    try:
+        # Validate JWT token
+        try:
+            payload = AuthService.decode_access_token(token)
+            role = payload.get("role")
+            
+            # Only supervisors can connect
+            if role != "supervisor":
+                await websocket.close(code=1008, reason="Unauthorized: supervisor role required")
+                return
+        
+        except Exception as e:
+            await websocket.close(code=1008, reason=f"Invalid token: {str(e)}")
+            return
+        
+        # Accept connection
+        connected = await surge_ws_manager.connect(websocket, depot_id)
+        
+        if not connected:
+            return  # Connection limit reached
+        
+        try:
+            # Keep connection alive and handle messages
+            while True:
+                # Wait for messages from client (e.g., pong responses)
+                data = await websocket.receive_text()
+                
+                # Echo back for debugging (optional)
+                if data == "ping":
+                    await websocket.send_text("pong")
+        
+        except WebSocketDisconnect:
+            logger.info(f"WebSocket disconnected for depot {depot_id}")
+        
+        finally:
+            surge_ws_manager.disconnect(websocket, depot_id)
+    
+    except Exception as e:
+        logger.error(f"WebSocket error: {str(e)}", exc_info=True)
+        try:
+            await websocket.close(code=1011, reason="Internal server error")
+        except:
+            pass

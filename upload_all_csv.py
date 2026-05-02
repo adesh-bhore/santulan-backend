@@ -118,10 +118,14 @@ def main():
     
     if success_count == len(FILES_TO_UPLOAD):
         print("\n🎉 All files uploaded successfully!")
-        print("\nYou can now:")
-        print("1. Go to the frontend optimization page")
-        print("2. Select a depot from the dropdown")
-        print("3. Run optimization")
+        print("\n📱 Driver App Login:")
+        print("   All drivers can now login with password: test123")
+        print("   Example: driver_id from CSV + password 'test123'")
+        print("\n🚀 You can now:")
+        print("1. Test driver app login with any driver_id + password 'test123'")
+        print("2. Go to the frontend optimization page")
+        print("3. Select a depot from the dropdown")
+        print("4. Run optimization")
     elif success_count > 0:
         print("\n⚠️  Some files uploaded successfully, but some failed.")
         print("   Check the errors above and try uploading the failed files again.")

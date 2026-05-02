@@ -201,12 +201,20 @@ class CSVUploadService:
     
     def _df_to_drivers(self, df: pd.DataFrame) -> List[Driver]:
         """Convert DataFrame to Driver objects"""
+        from app.services.auth_service import AuthService
+        
+        # Hardcoded password hash for "test123" - automatically added to all drivers
+        # This allows immediate login without running setup script
+        password_hash = AuthService.get_password_hash("test123")
+        
         return [
             Driver(
                 driver_id=row['driver_id'],
                 driver_name=row['driver_name'],
                 depot_id=row['depot_id'],
-                max_duty_hours=float(row.get('max_duty_hours', 8.0))
+                max_duty_hours=float(row.get('max_duty_hours', 8.0)),
+                password_hash=password_hash,  # Auto-set password to "test123"
+                is_active=True
             )
             for _, row in df.iterrows()
         ]

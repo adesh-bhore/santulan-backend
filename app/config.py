@@ -35,6 +35,25 @@ class Settings(BaseSettings):
     jwt_access_token_expire_hours: int = 24
     jwt_refresh_token_expire_days: int = 30
     
+    # DRT Ping Schedule Configuration
+    drt_stop_detection_radius_m: int = 500
+    drt_surge_ping_threshold: int = 50
+    drt_clustering_interval_minutes: int = 5
+    drt_ping_expiry_minutes: int = 30
+    
+    # DRT Phase 2 Configuration
+    drt_clustering_enabled: bool = True
+    drt_next_bus_gap_minutes: int = 15
+    drt_websocket_enabled: bool = True
+    drt_websocket_max_connections: int = 50
+    
+    # DRT Phase 3: Ghost Bus Suppression Configuration
+    ghost_bus_threshold: int = 5
+    ghost_bus_analysis_days: int = 30
+    ghost_bus_min_occurrences: int = 3
+    ghost_bus_auto_approve: bool = False
+    ghost_bus_analysis_time: str = "02:00"
+    
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

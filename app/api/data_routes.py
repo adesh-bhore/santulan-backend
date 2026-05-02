@@ -41,7 +41,7 @@ async def upload_csv(
     - `routes`: Bus routes
     - `stops`: Bus stops
     - `vehicles`: Fleet vehicles
-    - `drivers`: Bus drivers
+    - `drivers`: Bus drivers (password automatically set to "test123")
     - `timetable`: Trip schedules
     
     **Process:**
@@ -56,6 +56,7 @@ async def upload_csv(
     - Operation is atomic (all-or-nothing)
     - Validation errors prevent any database changes
     - Plan and Active tables are never modified
+    - All uploaded drivers automatically get password "test123" for immediate login
     """
     
     # Validate file is CSV

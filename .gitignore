@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Database
+*.db
+*.sqlite
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Alembic cache
+alembic/versions/__pycache__/
+
+# Test files (optional)
+test_*.py
+*_test.py

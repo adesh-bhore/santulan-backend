@@ -140,3 +140,56 @@ class DutyService:
             "duty": duty_info,
             "schedule": schedule
         }
+    
+    @staticmethod
+    def get_unscheduled_trips_for_driver(db: Session, driver_id: str, duty_date: date = None) -> list:
+        """
+        Get unscheduled trips assigned to a driver for a specific date.
+        
+        This is a READ-ONLY function that queries the DRT unscheduled_trips table
+        without modifying any existing data.
+        
+        Args:
+            db: Database session
+            driver_id: Driver ID
+            duty_date: Date to query (default: today)
+        
+        Returns:
+            List of unscheduled trip dictionaries
+        """
+        from app.drt.models import UnscheduledTrip
+        from app.models.base_models import Route, Stop
+        
+        if duty_date is None:
+            duty_date = date.today()
+        
+        # Query unscheduled trips for this driver on this date
+        unscheduled_trips = db.query(UnscheduledTrip).filter(
+            and_(
+                UnscheduledTrip.driver_id == driver_id,
+                UnscheduledTrip.scheduled_start_time >= datetime.combine(duty_date, datetime.min.time()),
+                UnscheduledTrip.scheduled_start_time < datetime.combine(duty_date, datetime.max.time())
+            )
+        ).order_by(UnscheduledTrip.scheduled_start_time).all()
+        
+        # Format unscheduled trips
+        result = []
+        for trip in unscheduled_trips:
+            # Get route and stop details
+            route = db.query(Route).filter(Route.route_id == trip.route_id).first()
+            start_stop = db.query(Stop).filter(Stop.stop_id == trip.start_stop_id).first()
+            end_stop = db.query(Stop).filter(Stop.stop_id == trip.end_stop_id).first()
+            
+            result.append({
+                "id": f"unscheduled-{trip.unscheduled_trip_id}",
+                "tripNumber": f"U{trip.unscheduled_trip_id}",  # Prefix with 'U' for unscheduled
+                "startPoint": start_stop.stop_name if start_stop else trip.start_stop_id,
+                "endPoint": end_stop.stop_name if end_stop else trip.end_stop_id,
+                "startTime": trip.scheduled_start_time.strftime("%H:%M"),
+                "endTime": trip.scheduled_end_time.strftime("%H:%M") if trip.scheduled_end_time else "N/A",
+                "status": "scheduled",  # Unscheduled trips are always scheduled initially
+                "is_unscheduled": True,  # Flag to identify unscheduled trips
+                "surge_reason": f"Surge event at {start_stop.stop_name if start_stop else trip.start_stop_id}"
+            })
+        
+        return result
