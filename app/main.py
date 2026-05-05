@@ -54,6 +54,45 @@ def run_daily_analysis_with_db():
         db.close()
 
 
+def run_daily_ping_cleanup():
+    """Wrapper to run daily ping cleanup at midnight"""
+    from app.drt.models import CommuterPing, SurgeEvent
+    
+    db = SessionLocal()
+    try:
+        # Delete ALL pings (fresh start each day)
+        ping_count = db.query(CommuterPing).count()
+        logger.info(f"Daily cleanup: Found {ping_count} pings to delete")
+        
+        db.query(CommuterPing).delete()
+        
+        # Also clean up old surge events (keep only today's)
+        from datetime import datetime
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        old_surges = db.query(SurgeEvent).filter(
+            SurgeEvent.detected_at < today_start
+        ).delete()
+        
+        db.commit()
+        logger.info(f"Daily cleanup completed: Deleted {ping_count} pings and {old_surges} old surge events")
+        
+        return {
+            'status': 'success',
+            'pings_deleted': ping_count,
+            'surges_deleted': old_surges
+        }
+    
+    except Exception as e:
+        logger.error(f"Daily ping cleanup failed: {str(e)}", exc_info=True)
+        db.rollback()
+        return {
+            'status': 'error',
+            'error': str(e)
+        }
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
@@ -95,6 +134,19 @@ async def lifespan(app: FastAPI):
             scheduler.start()
     else:
         print("⚠️  DRT daily analysis disabled via config")
+    
+    # Start daily ping cleanup job (runs at midnight)
+    print("✓ Starting daily ping cleanup job (daily at 00:00)")
+    scheduler.add_job(
+        run_daily_ping_cleanup,
+        'cron',
+        hour=0,
+        minute=0,
+        id='drt_daily_ping_cleanup',
+        replace_existing=True
+    )
+    if not scheduler.running:
+        scheduler.start()
     
     print("✓ Application started successfully")
     

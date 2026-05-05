@@ -104,17 +104,44 @@ class ClusteringService:
             }
     
     def _get_pending_pings(self) -> List[CommuterPing]:
-        """Get pending pings within expiry window"""
+        """
+        Get pending pings within 2-hour window, counting only ONE ping per unique commuter.
+        This prevents spam from same commuter making multiple pings.
+        """
         
-        cutoff_time = datetime.utcnow() - timedelta(minutes=self.ping_expiry_minutes)
+        # Use 2-hour window (120 minutes) for unique commuter counting
+        cutoff_time = datetime.utcnow() - timedelta(minutes=120)
         
-        pings = self.db.query(CommuterPing).filter(
+        # Get only the LATEST ping per commuter within 2-hour window
+        # Using subquery to get max ping_id per commuter
+        from sqlalchemy import select
+        
+        subquery = (
+            select(
+                CommuterPing.commuter_id,
+                func.max(CommuterPing.ping_id).label('max_ping_id')
+            )
+            .where(
+                and_(
+                    CommuterPing.status == 'pending',
+                    CommuterPing.detected_stop_id.isnot(None),
+                    CommuterPing.ping_time >= cutoff_time
+                )
+            )
+            .group_by(CommuterPing.commuter_id)
+            .subquery()
+        )
+        
+        # Get the actual ping records for these max ping_ids
+        pings = self.db.query(CommuterPing).join(
+            subquery,
             and_(
-                CommuterPing.status == 'pending',
-                CommuterPing.detected_stop_id.isnot(None),  # Only pings with detected stops
-                CommuterPing.ping_time >= cutoff_time
+                CommuterPing.commuter_id == subquery.c.commuter_id,
+                CommuterPing.ping_id == subquery.c.max_ping_id
             )
         ).all()
+        
+        logger.info(f"Found {len(pings)} unique commuter pings within 2-hour window")
         
         return pings
     
