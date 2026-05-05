@@ -30,14 +30,14 @@ class Settings(BaseSettings):
     celery_result_backend: str = "redis://localhost:6379/0"
     
     # JWT Authentication Configuration
-    jwt_secret_key: str = "your-secret-key-change-this-in-production-use-long-random-string"
+    jwt_secret_key: str = "Adesh@123"
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_hours: int = 24
     jwt_refresh_token_expire_days: int = 30
     
     # DRT Ping Schedule Configuration
     drt_stop_detection_radius_m: int = 500
-    drt_surge_ping_threshold: int = 50
+    drt_surge_ping_threshold: int = 10  # Demo: 10, Production: 50
     drt_clustering_interval_minutes: int = 5
     drt_ping_expiry_minutes: int = 30
     
