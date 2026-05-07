@@ -56,6 +56,7 @@ class Vehicle(Base):
     capacity: Mapped[int] = mapped_column(Integer, nullable=False)
     depot_id: Mapped[str] = mapped_column(String(50), ForeignKey("depots.depot_id"), nullable=False)
     emission_factor: Mapped[float] = mapped_column(Numeric(10, 4), default=2.68)  # kg CO2 per km
+    is_surge_vehicle: Mapped[bool] = mapped_column(default=False, nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -86,6 +87,7 @@ class Driver(Base):
     
     # Status
     is_active: Mapped[Optional[bool]] = mapped_column(default=True, nullable=True)
+    is_surge_driver: Mapped[bool] = mapped_column(default=False, nullable=False, index=True)
     
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

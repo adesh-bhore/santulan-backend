@@ -207,3 +207,97 @@ async def get_depots(db: Session = Depends(get_db)):
         ],
         "total": len(depots)
     }
+
+
+@router.get(
+    "/vehicles",
+    summary="Get vehicles",
+    description="Returns list of vehicles with optional filtering"
+)
+async def get_vehicles(
+    is_surge_vehicle: bool = None,
+    depot_id: str = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Get list of vehicles with optional filters.
+    
+    - **is_surge_vehicle**: Filter by surge vehicle flag (true/false)
+    - **depot_id**: Filter by depot
+    """
+    from app.models.base_models import Vehicle
+    from sqlalchemy import and_
+    
+    query = db.query(Vehicle)
+    
+    filters = []
+    if is_surge_vehicle is not None:
+        filters.append(Vehicle.is_surge_vehicle == is_surge_vehicle)
+    if depot_id:
+        filters.append(Vehicle.depot_id == depot_id)
+    
+    if filters:
+        query = query.filter(and_(*filters))
+    
+    vehicles = query.all()
+    
+    return {
+        "vehicles": [
+            {
+                "vehicle_id": v.vehicle_id,
+                "vehicle_type": v.vehicle_type,
+                "capacity": v.capacity,
+                "depot_id": v.depot_id,
+                "is_surge_vehicle": getattr(v, 'is_surge_vehicle', False)
+            }
+            for v in vehicles
+        ],
+        "total": len(vehicles)
+    }
+
+
+@router.get(
+    "/drivers",
+    summary="Get drivers",
+    description="Returns list of drivers with optional filtering"
+)
+async def get_drivers(
+    is_surge_driver: bool = None,
+    depot_id: str = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Get list of drivers with optional filters.
+    
+    - **is_surge_driver**: Filter by surge driver flag (true/false)
+    - **depot_id**: Filter by depot
+    """
+    from app.models.base_models import Driver
+    from sqlalchemy import and_
+    
+    query = db.query(Driver)
+    
+    filters = []
+    if is_surge_driver is not None:
+        filters.append(Driver.is_surge_driver == is_surge_driver)
+    if depot_id:
+        filters.append(Driver.depot_id == depot_id)
+    
+    if filters:
+        query = query.filter(and_(*filters))
+    
+    drivers = query.all()
+    
+    return {
+        "drivers": [
+            {
+                "driver_id": d.driver_id,
+                "driver_name": d.driver_name,
+                "depot_id": d.depot_id,
+                "phone": d.phone,
+                "is_surge_driver": getattr(d, 'is_surge_driver', False)
+            }
+            for d in drivers
+        ],
+        "total": len(drivers)
+    }

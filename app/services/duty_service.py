@@ -15,30 +15,122 @@ class DutyService:
     
     @staticmethod
     def get_today_duty(db: Session, driver_id: str) -> Optional[dict]:
-        """Get today's duty assignment and schedule for a driver"""
+        """Get today's duty assignment and schedule for a driver
+        
+        For surge drivers: Returns ONLY unscheduled trips (surge trips)
+        For regular drivers: Returns regular scheduled trips + unscheduled trips (if any)
+        """
         
         # Get driver information
         driver = db.query(Driver).filter(Driver.driver_id == driver_id).first()
         if not driver:
             return None
         
-        # Get driver's current assignments
+        duty_date = date.today()
+        
+        # Check if this is a surge driver
+        is_surge_driver = getattr(driver, 'is_surge_driver', False)
+        
+        # For surge drivers, ONLY return unscheduled trips
+        if is_surge_driver:
+            unscheduled_trips = DutyService.get_unscheduled_trips_for_driver(db, driver_id, duty_date)
+            
+            if not unscheduled_trips:
+                return None  # No surge duty assigned
+            
+            # Get depot information from first unscheduled trip
+            from app.drt.models import UnscheduledTrip
+            first_trip = db.query(UnscheduledTrip).filter(
+                and_(
+                    UnscheduledTrip.driver_id == driver_id,
+                    UnscheduledTrip.scheduled_start_time >= datetime.combine(duty_date, datetime.min.time()),
+                    UnscheduledTrip.scheduled_start_time < datetime.combine(duty_date, datetime.max.time())
+                )
+            ).first()
+            
+            depot = None
+            vehicle_number = "N/A"
+            if first_trip:
+                depot = db.query(Depot).filter(Depot.depot_id == first_trip.depot_id).first()
+                vehicle_number = first_trip.vehicle_id
+            
+            # Calculate shift times from unscheduled trips
+            shift_start = None
+            shift_end = None
+            for trip in unscheduled_trips:
+                trip_start = datetime.strptime(trip["startTime"], "%H:%M").time()
+                trip_end = datetime.strptime(trip["endTime"], "%H:%M").time() if trip["endTime"] != "N/A" else trip_start
+                
+                if shift_start is None or trip_start < shift_start:
+                    shift_start = trip_start
+                if shift_end is None or trip_end > shift_end:
+                    shift_end = trip_end
+            
+            # Determine duty status
+            current_time = datetime.now().time()
+            if shift_end and current_time > shift_end:
+                duty_status = "completed"
+            elif shift_start and current_time >= shift_start:
+                duty_status = "active"
+            else:
+                duty_status = "upcoming"
+            
+            # Build duty info for surge driver
+            duty_info = {
+                "id": f"surge-duty-{date.today().strftime('%Y%m%d')}-{driver_id}",
+                "date": date.today().strftime("%Y-%m-%d"),
+                "routeNumber": "SURGE",
+                "vehicleNumber": vehicle_number,
+                "shiftStart": shift_start.strftime("%H:%M") if shift_start else "00:00",
+                "shiftEnd": shift_end.strftime("%H:%M") if shift_end else "00:00",
+                "depot": depot.depot_name if depot else "N/A",
+                "depotMarathi": depot.depot_name if depot else "N/A",
+                "totalTrips": len(unscheduled_trips),
+                "completedTrips": 0,  # TODO: Track completed unscheduled trips
+                "status": duty_status
+            }
+            
+            return {
+                "duty": duty_info,
+                "schedule": unscheduled_trips
+            }
+        
+        # For regular drivers, get scheduled trips
         assignments = db.query(CurrentDriverAssignment).filter(
             CurrentDriverAssignment.driver_id == driver_id
         ).order_by(CurrentDriverAssignment.sequence_order).all()
         
         if not assignments:
+            # No regular assignments, check for unscheduled trips
+            unscheduled_trips = DutyService.get_unscheduled_trips_for_driver(db, driver_id, duty_date)
+            if unscheduled_trips:
+                # Return only unscheduled trips (edge case: regular driver assigned surge trip)
+                return {
+                    "duty": {
+                        "id": f"duty-{date.today().strftime('%Y%m%d')}-{driver_id}",
+                        "date": date.today().strftime("%Y-%m-%d"),
+                        "routeNumber": "UNSCHEDULED",
+                        "vehicleNumber": "N/A",
+                        "shiftStart": "00:00",
+                        "shiftEnd": "00:00",
+                        "depot": "N/A",
+                        "depotMarathi": "N/A",
+                        "totalTrips": len(unscheduled_trips),
+                        "completedTrips": 0,
+                        "status": "upcoming"
+                    },
+                    "schedule": unscheduled_trips
+                }
             return None  # No duty assigned
         
         # Initialize trip logs if not already created
-        duty_date = date.today()
         TripService.initialize_trip_logs(db, driver_id, duty_date)
         
         # Get depot information
         depot_id = assignments[0].depot_id
         depot = db.query(Depot).filter(Depot.depot_id == depot_id).first()
         
-        # Build schedule
+        # Build schedule from regular assignments
         schedule = []
         shift_start = None
         shift_end = None
@@ -102,6 +194,26 @@ class DutyService:
                 shift_start = trip.start_time
             if shift_end is None or trip.end_time > shift_end:
                 shift_end = trip.end_time
+        
+        # Get unscheduled trips for regular driver (if any)
+        unscheduled_trips = DutyService.get_unscheduled_trips_for_driver(db, driver_id, duty_date)
+        
+        # Merge unscheduled trips into schedule
+        if unscheduled_trips:
+            schedule.extend(unscheduled_trips)
+            
+            # Update shift times if unscheduled trips extend the shift
+            for trip in unscheduled_trips:
+                trip_start = datetime.strptime(trip["startTime"], "%H:%M").time()
+                trip_end = datetime.strptime(trip["endTime"], "%H:%M").time() if trip["endTime"] != "N/A" else trip_start
+                
+                if shift_start is None or trip_start < shift_start:
+                    shift_start = trip_start
+                if shift_end is None or trip_end > shift_end:
+                    shift_end = trip_end
+            
+            # Sort schedule by start time
+            schedule.sort(key=lambda x: x["startTime"])
         
         # Count completed trips from trip_logs
         completed_trips = db.query(TripLog).filter(
