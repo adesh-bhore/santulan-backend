@@ -294,14 +294,14 @@ class DutyService:
             
             result.append({
                 "id": f"unscheduled-{trip.unscheduled_trip_id}",
-                "tripNumber": f"U{trip.unscheduled_trip_id}",  # Prefix with 'U' for unscheduled
+                "tripNumber": 1000 + trip.unscheduled_trip_id,  # Use 1000+ range for unscheduled trips
                 "startPoint": start_stop.stop_name if start_stop else trip.start_stop_id,
                 "endPoint": end_stop.stop_name if end_stop else trip.end_stop_id,
                 "startTime": trip.scheduled_start_time.strftime("%H:%M"),
                 "endTime": trip.scheduled_end_time.strftime("%H:%M") if trip.scheduled_end_time else "N/A",
-                "status": "scheduled",  # Unscheduled trips are always scheduled initially
+                "status": trip.status,  # Use actual status from database
                 "is_unscheduled": True,  # Flag to identify unscheduled trips
-                "surge_reason": f"Surge event at {start_stop.stop_name if start_stop else trip.start_stop_id}"
+                "surge_reason": f"Surge trip from {start_stop.stop_name if start_stop else trip.start_stop_id}"
             })
         
         return result

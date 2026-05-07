@@ -13,6 +13,8 @@ class TripSchedule(BaseModel):
     startTime: str
     endTime: str
     status: str  # scheduled, active, completed, delayed, cancelled
+    is_unscheduled: Optional[bool] = False
+    surge_reason: Optional[str] = None
     
     class Config:
         from_attributes = True
