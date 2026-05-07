@@ -31,11 +31,9 @@ def upload_surge_vehicles():
                 # Create vehicle
                 vehicle = Vehicle(
                     vehicle_id=row['vehicle_id'],
-                    vehicle_number=row['vehicle_number'],
                     vehicle_type=row['vehicle_type'],
                     capacity=int(row['capacity']),
-                    depot_id=row['depot_id'],
-                    status=row['status']
+                    depot_id=row['depot_id']
                 )
                 
                 db.add(vehicle)
@@ -82,11 +80,10 @@ def upload_surge_drivers():
                 # Create driver
                 driver = Driver(
                     driver_id=row['driver_id'],
-                    name=row['name'],
-                    phone=row['phone'],
-                    license_number=row['license_number'],
+                    driver_name=row['name'],
                     depot_id=row['depot_id'],
-                    status=row['status']
+                    phone=row['phone'],
+                    license_number=row['license_number']
                 )
                 
                 db.add(driver)
