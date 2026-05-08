@@ -161,11 +161,32 @@ class ClusteringService:
         """
         Map stop to route corridors (which routes serve this stop).
         
+        Now supports intermediate stops via route_stops table!
+        Falls back to start/end stop logic if route_stops not available.
+        
         Returns:
             List of route IDs that serve this stop
         """
         
-        # Find all routes that have trips starting or ending at this stop
+        # Try route_stops table first (for intermediate stops)
+        try:
+            from app.models.base_models import RouteStop
+            
+            routes = self.db.query(RouteStop.route_id).filter(
+                RouteStop.stop_id == stop_id
+            ).distinct().all()
+            
+            if routes:
+                route_ids = [r.route_id for r in routes]
+                logger.info(f"Found {len(route_ids)} routes for stop {stop_id} via route_stops (corridor clustering)")
+                return route_ids
+            else:
+                logger.debug(f"No routes found in route_stops for stop {stop_id}, trying fallback")
+        
+        except Exception as e:
+            logger.warning(f"route_stops table not available or error: {e}, using fallback logic")
+        
+        # Fallback: Find all routes that have trips starting or ending at this stop
         routes = self.db.query(Route.route_id).join(
             Timetable, Route.route_id == Timetable.route_id
         ).filter(
@@ -173,6 +194,7 @@ class ClusteringService:
         ).distinct().all()
         
         route_ids = [r.route_id for r in routes]
+        logger.info(f"Found {len(route_ids)} routes for stop {stop_id} via timetable (start/end stops only)")
         
         return route_ids
     
