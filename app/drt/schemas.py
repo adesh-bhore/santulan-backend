@@ -102,6 +102,7 @@ class SurgeEventResponse(BaseModel):
     surge_id: int
     stop_id: str
     stop_name: Optional[str] = None
+    depot_id: Optional[str] = None  # Added for filtering surge resources
     route_ids: list
     ping_count: int
     detected_at: datetime

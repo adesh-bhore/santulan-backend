@@ -299,12 +299,20 @@ async def get_active_surges(
         service = SurgeService(db)
         surges = service.get_active_surges(depot_id=depot_id)
         
-        # Get stop names
+        # Get stop names and depot IDs
         stop_ids = [s.stop_id for s in surges]
         stops_dict = {}
+        depot_dict = {}
         if stop_ids:
             stops = db.query(Stop).filter(Stop.stop_id.in_(stop_ids)).all()
             stops_dict = {s.stop_id: s.stop_name for s in stops}
+            
+            # Get depot from first route of each surge
+            for surge in surges:
+                if surge.route_ids and len(surge.route_ids) > 0:
+                    route = db.query(Route).filter(Route.route_id == surge.route_ids[0]).first()
+                    if route:
+                        depot_dict[surge.stop_id] = route.depot_id
         
         # Build response
         result = []
@@ -313,6 +321,7 @@ async def get_active_surges(
                 surge_id=surge.surge_id,
                 stop_id=surge.stop_id,
                 stop_name=stops_dict.get(surge.stop_id),
+                depot_id=depot_dict.get(surge.stop_id),  # Add depot_id
                 route_ids=surge.route_ids if isinstance(surge.route_ids, list) else [],
                 ping_count=surge.ping_count,
                 detected_at=surge.detected_at,
