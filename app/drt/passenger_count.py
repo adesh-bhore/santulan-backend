@@ -281,3 +281,78 @@ class PassengerCountService:
         except Exception as e:
             logger.error(f"Error getting low demand patterns: {e}")
             raise
+    
+    def sync_from_trip_log(self, trip_log) -> Optional[PassengerCount]:
+        """
+        Automatically sync passenger count from trip_log to passenger_counts table
+        
+        This is called after a driver completes a trip to ensure the passenger
+        count is available for ghost bus analysis.
+        
+        Args:
+            trip_log: TripLog object with passenger count
+            
+        Returns:
+            PassengerCount object if synced, None if no count to sync
+        """
+        try:
+            # Skip if no passenger count
+            if not trip_log.passenger_count:
+                logger.debug(f"No passenger count to sync for trip {trip_log.trip_id}")
+                return None
+            
+            # Get route_id from timetable
+            from app.models.base_models import Timetable
+            trip = self.db.query(Timetable).filter(
+                Timetable.trip_id == trip_log.trip_id
+            ).first()
+            
+            if not trip:
+                logger.warning(f"Trip {trip_log.trip_id} not found in timetable, cannot sync passenger count")
+                return None
+            
+            # Check if already synced
+            existing = self.db.query(PassengerCount).filter(
+                and_(
+                    PassengerCount.trip_id == trip_log.trip_id,
+                    PassengerCount.trip_date == trip_log.duty_date
+                )
+            ).first()
+            
+            if existing:
+                # Update existing record
+                existing.passenger_count = trip_log.passenger_count
+                existing.vehicle_id = trip_log.vehicle_id
+                existing.driver_id = trip_log.driver_id
+                existing.recorded_at = datetime.now()
+                self.db.commit()
+                self.db.refresh(existing)
+                logger.info(f"Updated passenger count {existing.count_id} for trip {trip_log.trip_id}: {trip_log.passenger_count} passengers")
+                return existing
+            else:
+                # Create new record
+                count = PassengerCount(
+                    trip_id=trip_log.trip_id,
+                    route_id=trip.route_id,
+                    vehicle_id=trip_log.vehicle_id,
+                    driver_id=trip_log.driver_id,
+                    passenger_count=trip_log.passenger_count,
+                    boarding_count=None,
+                    alighting_count=None,
+                    trip_date=trip_log.duty_date,
+                    trip_time=trip_log.scheduled_start_time,
+                    source="automatic",  # From driver app
+                    recorded_by=trip_log.driver_id,
+                    recorded_at=datetime.now()
+                )
+                self.db.add(count)
+                self.db.commit()
+                self.db.refresh(count)
+                logger.info(f"Synced passenger count {count.count_id} from trip_log for trip {trip_log.trip_id}: {trip_log.passenger_count} passengers")
+                return count
+                
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Error syncing passenger count from trip_log: {e}")
+            # Don't raise - this is a background sync, shouldn't fail the trip completion
+            return None

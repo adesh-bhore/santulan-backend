@@ -28,10 +28,13 @@ async def start_trip(
     """
     Start a trip. Called when driver clicks "Start Trip" button.
     
+    Handles both regular trips and unscheduled trips (surge trips).
+    Unscheduled trip IDs have format: "unscheduled-{id}"
+    
     Validates:
     - Trip exists and belongs to driver
     - Trip not already started
-    - Previous trips are completed (sequential order)
+    - Previous trips are completed (sequential order) - regular trips only
     - Only one trip can be active at a time
     """
     try:
@@ -46,14 +49,29 @@ async def start_trip(
             "longitude": request.location.longitude
         }
         
-        # Start the trip
-        result = TripService.start_trip(
-            db=db,
-            trip_id=trip_id,
-            driver_id=driver_id,
-            actual_start_time=actual_start_time,
-            location=location
-        )
+        # Check if this is an unscheduled trip
+        if trip_id.startswith("unscheduled-"):
+            # Extract unscheduled trip ID
+            unscheduled_trip_id = int(trip_id.replace("unscheduled-", ""))
+            
+            # Use unscheduled trip service
+            from app.services.unscheduled_trip_service import UnscheduledTripService
+            result = UnscheduledTripService.start_unscheduled_trip(
+                db=db,
+                unscheduled_trip_id=unscheduled_trip_id,
+                driver_id=driver_id,
+                actual_start_time=actual_start_time,
+                location=location
+            )
+        else:
+            # Regular trip
+            result = TripService.start_trip(
+                db=db,
+                trip_id=trip_id,
+                driver_id=driver_id,
+                actual_start_time=actual_start_time,
+                location=location
+            )
         
         return result
     
@@ -67,6 +85,15 @@ async def start_trip(
                     "error": "TRIP_NOT_FOUND",
                     "message": "Trip not found",
                     "messageMarathi": "ट्रिप सापडली नाही"
+                }
+            )
+        elif error_code == "UNAUTHORIZED":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "UNAUTHORIZED",
+                    "message": "This trip is not assigned to you",
+                    "messageMarathi": "ही ट्रिप तुम्हाला नियुक्त केलेली नाही"
                 }
             )
         elif error_code == "TRIP_ALREADY_STARTED":
@@ -132,11 +159,14 @@ async def end_trip(
     """
     End a trip. Called when driver clicks "End Trip" button.
     
+    Handles both regular trips and unscheduled trips (surge trips).
+    Unscheduled trip IDs have format: "unscheduled-{id}"
+    
     Records:
     - Actual end time
     - End location
     - Passenger count
-    - Fare collected
+    - Fare collected (regular trips only)
     - Optional notes
     """
     try:
@@ -151,17 +181,34 @@ async def end_trip(
             "longitude": request.location.longitude
         }
         
-        # End the trip
-        result = TripService.end_trip(
-            db=db,
-            trip_id=trip_id,
-            driver_id=driver_id,
-            actual_end_time=actual_end_time,
-            location=location,
-            passenger_count=request.passengerCount,
-            fare_collected=request.fareCollected,
-            notes=request.notes
-        )
+        # Check if this is an unscheduled trip
+        if trip_id.startswith("unscheduled-"):
+            # Extract unscheduled trip ID
+            unscheduled_trip_id = int(trip_id.replace("unscheduled-", ""))
+            
+            # Use unscheduled trip service
+            from app.services.unscheduled_trip_service import UnscheduledTripService
+            result = UnscheduledTripService.end_unscheduled_trip(
+                db=db,
+                unscheduled_trip_id=unscheduled_trip_id,
+                driver_id=driver_id,
+                actual_end_time=actual_end_time,
+                location=location,
+                passenger_count=request.passengerCount,
+                notes=request.notes
+            )
+        else:
+            # Regular trip
+            result = TripService.end_trip(
+                db=db,
+                trip_id=trip_id,
+                driver_id=driver_id,
+                actual_end_time=actual_end_time,
+                location=location,
+                passenger_count=request.passengerCount,
+                fare_collected=request.fareCollected,
+                notes=request.notes
+            )
         
         return result
     
@@ -175,6 +222,15 @@ async def end_trip(
                     "error": "TRIP_NOT_FOUND",
                     "message": "Trip not found",
                     "messageMarathi": "ट्रिप सापडली नाही"
+                }
+            )
+        elif error_code == "UNAUTHORIZED":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "UNAUTHORIZED",
+                    "message": "This trip is not assigned to you",
+                    "messageMarathi": "ही ट्रिप तुम्हाला नियुक्त केलेली नाही"
                 }
             )
         elif error_code == "TRIP_NOT_STARTED":

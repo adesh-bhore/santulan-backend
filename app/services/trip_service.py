@@ -218,6 +218,17 @@ class TripService:
         db.commit()
         db.refresh(trip_log)
         
+        # Auto-sync passenger count to passenger_counts table for ghost bus analysis
+        try:
+            from app.drt.passenger_count import PassengerCountService
+            count_service = PassengerCountService(db)
+            count_service.sync_from_trip_log(trip_log)
+        except Exception as e:
+            # Log error but don't fail the trip completion
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to sync passenger count for trip {trip_id}: {e}")
+        
         # Get trip number
         assignment = db.query(CurrentDriverAssignment).filter(
             and_(
