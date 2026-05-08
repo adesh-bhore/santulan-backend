@@ -34,6 +34,9 @@ class Route(Base):
     route_name: Mapped[str] = mapped_column(String(200), nullable=False)
     depot_id: Mapped[str] = mapped_column(String(50), ForeignKey("depots.depot_id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    route_stops: Mapped[list["RouteStop"]] = relationship("RouteStop", back_populates="route", cascade="all, delete-orphan")
 
 
 class Stop(Base):
@@ -90,6 +93,22 @@ class Driver(Base):
     is_surge_driver: Mapped[bool] = mapped_column(default=False, nullable=False, index=True)
     
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class RouteStop(Base):
+    """Intermediate stops along a route for corridor-based clustering"""
+    __tablename__ = "route_stops"
+    
+    route_stop_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    route_id: Mapped[str] = mapped_column(String(50), ForeignKey("routes.route_id"), nullable=False)
+    stop_id: Mapped[str] = mapped_column(String(50), ForeignKey("stops.stop_id"), nullable=False)
+    stop_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    distance_from_start_km: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    route: Mapped["Route"] = relationship("Route", back_populates="route_stops")
+    stop: Mapped["Stop"] = relationship("Stop")
 
 
 class Timetable(Base):
