@@ -257,8 +257,9 @@ async def root():
 # Register API routes
 from app.api import (
     data_routes, optimization_routes, plan_routes, driver_routes, 
-    report_routes, dashboard_routes, auth_routes, duty_routes, driver_profile_routes, trip_routes, test_routes
+    report_routes, dashboard_routes, auth_routes, duty_routes, driver_profile_routes, trip_routes
 )
+from app.api import test_routes  # Import separately
 from app.drt import routes as drt_routes
 
 app.include_router(dashboard_routes.router, prefix="/api", tags=["Dashboard"])
