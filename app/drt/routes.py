@@ -307,12 +307,18 @@ async def get_active_surges(
             stops = db.query(Stop).filter(Stop.stop_id.in_(stop_ids)).all()
             stops_dict = {s.stop_id: s.stop_name for s in stops}
             
-            # Get depot from first route of each surge
+            # Get depot from routes - use most common depot among all routes
             for surge in surges:
                 if surge.route_ids and len(surge.route_ids) > 0:
-                    route = db.query(Route).filter(Route.route_id == surge.route_ids[0]).first()
-                    if route:
-                        depot_dict[surge.stop_id] = route.depot_id
+                    # Get all routes for this surge
+                    routes = db.query(Route).filter(Route.route_id.in_(surge.route_ids)).all()
+                    if routes:
+                        # Count depot occurrences
+                        from collections import Counter
+                        depot_counts = Counter([r.depot_id for r in routes])
+                        # Use most common depot
+                        most_common_depot = depot_counts.most_common(1)[0][0]
+                        depot_dict[surge.stop_id] = most_common_depot
         
         # Build response
         result = []
