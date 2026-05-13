@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Two Surge Test Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .location-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+
+        .swargate {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .hadapsar {
+            background: #2196F3;
+            color: white;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-box {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            flex: 1;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+        }
+
+        .btn-danger {
+            background: #f44336;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #da190b;
+            transform: translateY(-2px);
+        }
+
+        .btn-info {
+            background: #2196F3;
+            color: white;
+        }
+
+        .btn-info:hover {
+            background: #0b7dda;
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .log-container {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 10px;
+            height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.6;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-left: 3px solid transparent;
+        }
+
+        .log-info {
+            border-left-color: #2196F3;
+        }
+
+        .log-success {
+            border-left-color: #4CAF50;
+            color: #4CAF50;
+        }
+
+        .log-error {
+            border-left-color: #f44336;
+            color: #f44336;
+        }
+
+        .log-warning {
+            border-left-color: #ff9800;
+            color: #ff9800;
+        }
+
+        .surge-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 15px;
+        }
+
+        .surge-card h3 {
+            margin-bottom: 10px;
+        }
+
+        .surge-info {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.8em;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .status-pending {
+            background: #ff9800;
+        }
+
+        .status-approved {
+            background: #4CAF50;
+        }
+
+        .status-rejected {
+            background: #f44336;
+        }
+
+        .commuter-list {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+
+        .commuter-item {
+            background: #f5f5f5;
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚌 Two Surge Test Dashboard</h1>
+            <p>Test corridor clustering with 22 pings at 2 different locations</p>
+        </div>
+
+        <div class="grid">
+            <!-- Swargate Card -->
+            <div class="card">
+                <h2>
+                    <span class="location-badge swargate">Swargate</span>
+                    Location 1
+                </h2>
+                <div class="stats">
+                    <div class="stat-box">
+                        <div class="stat-value" id="swargate-pings">0</div>
+                        <div class="stat-label">Pings</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="swargate-commuters">10</div>
+                        <div class="stat-label">Commuters</div>
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button class="btn-success" onclick="createPingsAtSwargate()">
+                        Create 10 Pings
+                    </button>
+                </div>
+                <div id="swargate-surge"></div>
+            </div>
+
+            <!-- Hadapsar Card -->
+            <div class="card">
+                <h2>
+                    <span class="location-badge hadapsar">Hadapsar</span>
+                    Location 2
+                </h2>
+                <div class="stats">
+                    <div class="stat-box">
+                        <div class="stat-value" id="hadapsar-pings">0</div>
+                        <div class="stat-label">Pings</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="hadapsar-commuters">12</div>
+                        <div class="stat-label">Commuters</div>
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button class="btn-info" onclick="createPingsAtHadapsar()">
+                        Create 12 Pings
+                    </button>
+                </div>
+                <div id="hadapsar-surge"></div>
+            </div>
+        </div>
+
+        <!-- Control Panel -->
+        <div class="card full-width">
+            <h2>🎮 Control Panel</h2>
+            <div class="button-group">
+                <button class="btn-primary" onclick="runFullTest()">
+                    🚀 Run Full Test (22 Pings)
+                </button>
+                <button class="btn-success" onclick="runClustering()">
+                    🔄 Run Clustering
+                </button>
+                <button class="btn-info" onclick="checkSurges()">
+                    📊 Check Surges
+                </button>
+                <button class="btn-danger" onclick="cleanup()">
+                    🗑️ Cleanup
+                </button>
+            </div>
+        </div>
+
+        <!-- Surge Results -->
+        <div class="card full-width">
+            <h2>📈 Active Surges</h2>
+            <div id="surge-results">
+                <p style="color: #666; text-align: center; padding: 20px;">
+                    No surges detected yet. Run the test to create surges.
+                </p>
+            </div>
+        </div>
+
+        <!-- Logs -->
+        <div class="card full-width">
+            <h2>📋 Logs</h2>
+            <div class="log-container" id="logs">
+                <div class="log-entry log-info">
+                    [INFO] Dashboard loaded. Ready to test.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api';
+        
+        // Logging
+        function log(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${timestamp}] ${message}`;
+            logsDiv.appendChild(entry);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+
+        // Create pings at Swargate
+        async function createPingsAtSwargate() {
+            log('Creating 10 pings at Swargate...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/drt/test/create-pings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        location: 'swargate',
+                        count: 10,
+                        commuter_start: 1
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    log(`✓ Created ${data.pings_created} pings at Swargate`, 'success');
+                    document.getElementById('swargate-pings').textContent = data.pings_created;
+                } else {
+                    log(`✗ Error: ${data.detail}`, 'error');
+                }
+            } catch (error) {
+                log(`✗ Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Create pings at Hadapsar
+        async function createPingsAtHadapsar() {
+            log('Creating 12 pings at Hadapsar...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/drt/test/create-pings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        location: 'hadapsar',
+                        count: 12,
+                        commuter_start: 11
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    log(`✓ Created ${data.pings_created} pings at Hadapsar`, 'success');
+                    document.getElementById('hadapsar-pings').textContent = data.pings_created;
+                } else {
+                    log(`✗ Error: ${data.detail}`, 'error');
+                }
+            } catch (error) {
+                log(`✗ Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Run full test
+        async function runFullTest() {
+            log('========================================', 'info');
+            log('Starting full test...', 'info');
+            log('========================================', 'info');
+            
+            // Create pings at both locations
+            await createPingsAtSwargate();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await createPingsAtHadapsar();
+            
+            // Wait a bit then run clustering
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            log('Waiting 2 seconds before clustering...', 'info');
+            await runClustering();
+            
+            // Check surges
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await checkSurges();
+        }
+
+        // Run clustering
+        async function runClustering() {
+            log('Running clustering job...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/drt/test/run-clustering`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    log(`✓ Clustering complete`, 'success');
+                    log(`  - Pending pings: ${data.pending_pings}`, 'info');
+                    log(`  - Surges detected: ${data.surges_detected}`, 'success');
+                } else {
+                    log(`✗ Clustering failed: ${data.detail}`, 'error');
+                }
+            } catch (error) {
+                log(`✗ Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Check surges
+        async function checkSurges() {
+            log('Checking active surges...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/drt/surge/active`);
+                const surges = await response.json();
+                
+                if (surges.length === 0) {
+                    log('No active surges found', 'warning');
+                    document.getElementById('surge-results').innerHTML = 
+                        '<p style="color: #666; text-align: center; padding: 20px;">No surges detected yet.</p>';
+                    return;
+                }
+                
+                log(`✓ Found ${surges.length} active surge(s)`, 'success');
+                
+                let html = '';
+                surges.forEach(surge => {
+                    log(`  - Surge #${surge.surge_id}: ${surge.stop_name} (${surge.ping_count} pings)`, 'info');
+                    
+                    html += `
+                        <div class="surge-card">
+                            <h3>
+                                Surge #${surge.surge_id}
+                                <span class="status-badge status-${surge.status}">${surge.status.toUpperCase()}</span>
+                            </h3>
+                            <div class="surge-info">
+                                <div>
+                                    <strong>Location:</strong> ${surge.stop_name} (${surge.stop_id})<br>
+                                    <strong>Routes:</strong> ${surge.route_ids.join(', ')}<br>
+                                    <strong>Ping Count:</strong> ${surge.ping_count}
+                                </div>
+                                <div>
+                                    <strong>Detected:</strong> ${new Date(surge.detected_at).toLocaleString()}<br>
+                                    <strong>Status:</strong> ${surge.status}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                document.getElementById('surge-results').innerHTML = html;
+                
+            } catch (error) {
+                log(`✗ Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Cleanup
+        async function cleanup() {
+            if (!confirm('Are you sure you want to cleanup all test data?')) {
+                return;
+            }
+            
+            log('Cleaning up test data...', 'warning');
+            
+            try {
+                const response = await fetch(`${API_BASE}/drt/test/cleanup`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    log(`✓ Cleanup complete`, 'success');
+                    log(`  - Deleted ${data.pings_deleted} pings`, 'info');
+                    log(`  - Deleted ${data.surges_deleted} surges`, 'info');
+                    log(`  - Deleted ${data.commuters_deleted} commuters`, 'info');
+                    
+                    // Reset UI
+                    document.getElementById('swargate-pings').textContent = '0';
+                    document.getElementById('hadapsar-pings').textContent = '0';
+                    document.getElementById('surge-results').innerHTML = 
+                        '<p style="color: #666; text-align: center; padding: 20px;">No surges detected yet.</p>';
+                } else {
+                    log(`✗ Cleanup failed: ${data.detail}`, 'error');
+                }
+            } catch (error) {
+                log(`✗ Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Auto-refresh surges every 10 seconds
+        setInterval(checkSurges, 10000);
+        
+        log('Dashboard ready. Click "Run Full Test" to start.', 'success');
+    </script>
+</body>
+</html>

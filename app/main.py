@@ -257,7 +257,7 @@ async def root():
 # Register API routes
 from app.api import (
     data_routes, optimization_routes, plan_routes, driver_routes, 
-    report_routes, dashboard_routes, auth_routes, duty_routes, driver_profile_routes, trip_routes
+    report_routes, dashboard_routes, auth_routes, duty_routes, driver_profile_routes, trip_routes, test_routes
 )
 from app.drt import routes as drt_routes
 
@@ -276,6 +276,9 @@ app.include_router(trip_routes.router, prefix="/api", tags=["Driver App - Trip M
 
 # DRT Ping Schedule APIs (Isolated Module)
 app.include_router(drt_routes.router, prefix="/api/drt", tags=["DRT - Ping Schedule"])
+
+# Test APIs (for development/testing only)
+app.include_router(test_routes.router, prefix="/api/drt", tags=["DRT - Testing"])
 
 
 # DRT WebSocket endpoint for real-time surge notifications
