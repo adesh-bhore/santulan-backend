@@ -47,7 +47,7 @@ def populate_sample_data():
     # Sample data for demonstration
     # In production, this should come from actual route planning data
     sample_routes = [
-        # Route 1: Swargate to Katraj
+        # Route 1: Swargate to Katraj (with all intermediate stops)
         {'route_id': '1', 'stops': [
             ('STOP_SWGT', 0.0),
             ('STOP_MRKT', 1.5),
@@ -72,13 +72,156 @@ def populate_sample_data():
             ('STOP_HDPS', 5.5),
         ]},
         
-        # Route 31: Katraj to Swargate (reverse of Route 1)
+        # Route 4: Swargate to Kothrud
+        {'route_id': '4', 'stops': [
+            ('STOP_SWGT', 0.0),
+            ('STOP_DCCN', 2.1),
+            ('STOP_KRVE', 3.5),
+            ('STOP_KTRD', 4.8),
+        ]},
+        
+        # Route 5: Swargate to Market Yard
+        {'route_id': '5', 'stops': [
+            ('STOP_SWGT', 0.0),
+            ('STOP_MRKT', 1.5),
+        ]},
+        
+        # Route 6: Swargate to Deccan
+        {'route_id': '6', 'stops': [
+            ('STOP_SWGT', 0.0),
+            ('STOP_PNST', 2.1),
+            ('STOP_DCCN', 3.5),
+        ]},
+        
+        # Route 31: Katraj to Swargate (reverse of Route 1 - COMPLETE CORRIDOR)
         {'route_id': '31', 'stops': [
             ('STOP_KTRJ', 0.0),
             ('STOP_BIBW', 1.7),
             ('STOP_DHNK', 3.3),
             ('STOP_MRKT', 5.0),
             ('STOP_SWGT', 6.5),
+        ]},
+        
+        # Route 32: Katraj to Dhankawadi
+        {'route_id': '32', 'stops': [
+            ('STOP_KTRJ', 0.0),
+            ('STOP_BIBW', 1.7),
+            ('STOP_DHNK', 3.3),
+        ]},
+        
+        # Route 33: Katraj to Market Yard
+        {'route_id': '33', 'stops': [
+            ('STOP_KTRJ', 0.0),
+            ('STOP_BIBW', 1.7),
+            ('STOP_DHNK', 3.3),
+            ('STOP_MRKT', 5.0),
+        ]},
+        
+        # Route 34: Katraj to Bibvewadi
+        {'route_id': '34', 'stops': [
+            ('STOP_KTRJ', 0.0),
+            ('STOP_BIBW', 1.7),
+        ]},
+        
+        # Hadapsar Routes (72-75) for depot detection
+        {'route_id': '72', 'stops': [
+            ('STOP_HDPS', 0.0),
+            ('STOP_FTHS', 1.7),
+            ('STOP_WNGV', 3.2),
+            ('STOP_SWGT', 5.5),
+        ]},
+        
+        {'route_id': '73', 'stops': [
+            ('STOP_HDPS', 0.0),
+            ('STOP_MNDW', 2.5),
+            ('STOP_KHRD', 4.8),
+        ]},
+        
+        {'route_id': '74', 'stops': [
+            ('STOP_HDPS', 0.0),
+            ('STOP_PNST', 3.2),
+            ('STOP_SHVJ', 5.1),
+        ]},
+        
+        {'route_id': '75', 'stops': [
+            ('STOP_HDPS', 0.0),
+            ('STOP_KHRD', 2.8),
+            ('STOP_VMNR', 5.5),
+        ]},
+        
+        # Nigdi Routes (11-15)
+        {'route_id': '11', 'stops': [
+            ('STOP_NGDI', 0.0),
+            ('STOP_PMPR', 2.5),
+            ('STOP_CHWT', 4.2),
+            ('STOP_PCMC', 5.8),
+        ]},
+        
+        {'route_id': '12', 'stops': [
+            ('STOP_NGDI', 0.0),
+            ('STOP_AKRD', 1.8),
+        ]},
+        
+        {'route_id': '13', 'stops': [
+            ('STOP_NGDI', 0.0),
+            ('STOP_CHWT', 2.5),
+        ]},
+        
+        {'route_id': '14', 'stops': [
+            ('STOP_NGDI', 0.0),
+            ('STOP_SNGV', 3.2),
+        ]},
+        
+        {'route_id': '15', 'stops': [
+            ('STOP_NGDI', 0.0),
+            ('STOP_PHGW', 1.5),
+        ]},
+        
+        # Bhosari Routes (21-24)
+        {'route_id': '21', 'stops': [
+            ('STOP_BHSR', 0.0),
+            ('STOP_PCMC', 2.8),
+        ]},
+        
+        {'route_id': '22', 'stops': [
+            ('STOP_BHSR', 0.0),
+            ('STOP_PMPR', 3.5),
+        ]},
+        
+        {'route_id': '23', 'stops': [
+            ('STOP_BHSR', 0.0),
+            ('STOP_KSRW', 1.8),
+        ]},
+        
+        {'route_id': '24', 'stops': [
+            ('STOP_BHSR', 0.0),
+            ('STOP_CHKN', 4.5),
+        ]},
+        
+        # Wakad Routes (61-65)
+        {'route_id': '61', 'stops': [
+            ('STOP_WKAD', 0.0),
+            ('STOP_HNEW', 3.5),
+        ]},
+        
+        {'route_id': '62', 'stops': [
+            ('STOP_WKAD', 0.0),
+            ('STOP_BNRR', 2.8),
+        ]},
+        
+        {'route_id': '63', 'stops': [
+            ('STOP_WKAD', 0.0),
+            ('STOP_AUNDH', 3.2),
+        ]},
+        
+        {'route_id': '64', 'stops': [
+            ('STOP_WKAD', 0.0),
+            ('STOP_PCMC', 4.5),
+        ]},
+        
+        {'route_id': '65', 'stops': [
+            ('STOP_WKAD', 0.0),
+            ('STOP_PSDR', 2.1),
         ]},
     ]
     
