@@ -32,10 +32,15 @@ class ClusteringService:
         """
         Main clustering job that runs every 5 minutes.
         
+        Uses corridor-based clustering:
+        - Counts pings along entire route corridors
+        - Creates surge when route total >= threshold
+        - One bus can serve multiple stops on same route
+        
         Returns:
             Dict with job statistics
         """
-        logger.info("Starting clustering job...")
+        logger.info("Starting corridor-based clustering job...")
         
         try:
             # Get pending pings within expiry window
@@ -54,46 +59,61 @@ class ClusteringService:
             # Group pings by stop
             pings_by_stop = self._group_pings_by_stop(pending_pings)
             
-            # Process each stop
+            # NEW: Corridor-based clustering
+            # Count pings along each route corridor
+            route_corridors = self._cluster_by_route_corridor(pings_by_stop)
+            
+            # Create surges for routes that meet threshold
             surges_created = 0
-            for stop_id, pings in pings_by_stop.items():
-                # Map stop to route corridors
-                route_corridors = self._map_stop_to_corridors(stop_id)
+            used_ping_ids = set()  # Track pings already assigned to a surge
+            
+            # Sort routes by ping count (descending) to prioritize busiest routes
+            sorted_routes = sorted(route_corridors.items(), key=lambda x: x[1]['total_pings'], reverse=True)
+            
+            for route_id, corridor_data in sorted_routes:
+                total_pings = corridor_data['total_pings']
+                stops_with_pings = corridor_data['stops']
+                all_pings = corridor_data['pings']
                 
-                if not route_corridors:
-                    logger.warning(f"Stop {stop_id} has no routes serving it")
+                # Filter out pings already used in other surges
+                available_pings = [p for p in all_pings if p.ping_id not in used_ping_ids]
+                
+                if len(available_pings) < self.surge_threshold:
+                    logger.debug(f"Route {route_id} has {len(available_pings)} available pings (threshold: {self.surge_threshold})")
                     continue
                 
-                # Group pings by route corridor
-                for route_id in route_corridors:
-                    corridor_pings = pings  # All pings at this stop are for this corridor
+                # Check if next bus is coming soon on this route
+                if self._is_next_bus_coming_soon_for_route(route_id, stops_with_pings):
+                    logger.info(f"Skipping surge for route {route_id} - bus coming soon")
+                    continue
+                
+                # Determine primary stop (stop with most pings)
+                primary_stop = max(stops_with_pings.items(), key=lambda x: len(x[1]))[0]
+                
+                # Create surge event for this route corridor
+                surge = self._create_surge_event(
+                    stop_id=primary_stop,  # Primary stop for display
+                    route_ids=[route_id],  # Single route for this corridor
+                    pings=available_pings,
+                    corridor_stops=list(stops_with_pings.keys())  # All stops on this corridor
+                )
+                
+                if surge:
+                    surges_created += 1
+                    # Mark these pings as used
+                    used_ping_ids.update([p.ping_id for p in available_pings])
+                    logger.info(f"Created corridor surge {surge.surge_id} for route {route_id} with {len(available_pings)} pings across {len(stops_with_pings)} stops")
                     
-                    if len(corridor_pings) >= self.surge_threshold:
-                        # Check if next bus is coming soon
-                        if self._is_next_bus_coming_soon(route_id, stop_id):
-                            logger.info(f"Skipping surge for {route_id} at {stop_id} - bus coming soon")
-                            continue
-                        
-                        # Create surge event
-                        surge = self._create_surge_event(
-                            stop_id=stop_id,
-                            route_ids=[route_id],
-                            pings=corridor_pings
-                        )
-                        
-                        if surge:
-                            surges_created += 1
-                            logger.info(f"Created surge {surge.surge_id} for {route_id} at {stop_id}")
-                            
-                            # Broadcast surge event via WebSocket
-                            self._broadcast_surge_event(surge)
+                    # Broadcast surge event via WebSocket
+                    self._broadcast_surge_event(surge)
             
-            logger.info(f"Clustering job complete: {surges_created} surges created")
+            logger.info(f"Corridor clustering complete: {surges_created} surges created from {len(pending_pings)} pings")
             
             return {
                 'status': 'success',
                 'pending_pings': len(pending_pings),
-                'surges_detected': surges_created
+                'surges_detected': surges_created,
+                'routes_analyzed': len(route_corridors)
             }
         
         except Exception as e:
@@ -198,6 +218,121 @@ class ClusteringService:
         
         return route_ids
     
+    def _cluster_by_route_corridor(self, pings_by_stop: Dict[str, List[CommuterPing]]) -> Dict[str, Dict]:
+        """
+        Cluster pings by route corridor.
+        
+        For each route, count total pings across ALL stops on that route.
+        This allows one bus to serve multiple stops along the same route.
+        
+        Args:
+            pings_by_stop: Dictionary mapping stop_id to list of pings
+        
+        Returns:
+            Dictionary mapping route_id to corridor data:
+            {
+                'route_id': {
+                    'total_pings': int,
+                    'stops': {stop_id: [pings]},
+                    'pings': [all pings for this route]
+                }
+            }
+        """
+        
+        route_corridors = {}
+        
+        # Get all unique routes from all stops
+        all_routes = set()
+        for stop_id in pings_by_stop.keys():
+            routes = self._map_stop_to_corridors(stop_id)
+            all_routes.update(routes)
+        
+        logger.info(f"Analyzing {len(all_routes)} unique routes for corridor clustering")
+        
+        # For each route, collect pings from all stops on that route
+        for route_id in all_routes:
+            # Get all stops on this route
+            route_stops = self._get_stops_for_route(route_id)
+            
+            if not route_stops:
+                logger.debug(f"Route {route_id} has no stops defined")
+                continue
+            
+            # Collect pings from stops on this route
+            corridor_pings = []
+            stops_with_pings = {}
+            
+            for stop_id in route_stops:
+                if stop_id in pings_by_stop:
+                    stop_pings = pings_by_stop[stop_id]
+                    corridor_pings.extend(stop_pings)
+                    stops_with_pings[stop_id] = stop_pings
+            
+            if corridor_pings:
+                route_corridors[route_id] = {
+                    'total_pings': len(corridor_pings),
+                    'stops': stops_with_pings,
+                    'pings': corridor_pings
+                }
+                logger.debug(f"Route {route_id}: {len(corridor_pings)} pings across {len(stops_with_pings)} stops")
+        
+        return route_corridors
+    
+    def _get_stops_for_route(self, route_id: str) -> List[str]:
+        """
+        Get all stops served by a route.
+        
+        Args:
+            route_id: Route ID
+        
+        Returns:
+            List of stop IDs on this route
+        """
+        
+        try:
+            from app.models.base_models import RouteStop
+            
+            stops = self.db.query(RouteStop.stop_id).filter(
+                RouteStop.route_id == route_id
+            ).order_by(RouteStop.stop_sequence).all()
+            
+            if stops:
+                stop_ids = [s.stop_id for s in stops]
+                return stop_ids
+        
+        except Exception as e:
+            logger.debug(f"route_stops table not available for route {route_id}: {e}")
+        
+        # Fallback: Get start and end stops from timetable
+        stops = self.db.query(Timetable.start_stop_id, Timetable.end_stop_id).filter(
+            Timetable.route_id == route_id
+        ).distinct().all()
+        
+        stop_ids = set()
+        for start, end in stops:
+            stop_ids.add(start)
+            stop_ids.add(end)
+        
+        return list(stop_ids)
+    
+    def _is_next_bus_coming_soon_for_route(self, route_id: str, stops_with_pings: Dict[str, List]) -> bool:
+        """
+        Check if next bus is coming soon for ANY stop on this route.
+        
+        Args:
+            route_id: Route ID
+            stops_with_pings: Dictionary of stop_id to pings
+        
+        Returns:
+            True if bus coming soon for any stop on this route
+        """
+        
+        for stop_id in stops_with_pings.keys():
+            if self._is_next_bus_coming_soon(route_id, stop_id):
+                return True
+        
+        return False
+    
     def _is_next_bus_coming_soon(self, route_id: str, stop_id: str) -> bool:
         """
         Check if next scheduled bus is coming within gap threshold.
@@ -240,32 +375,36 @@ class ClusteringService:
         self,
         stop_id: str,
         route_ids: List[str],
-        pings: List[CommuterPing]
+        pings: List[CommuterPing],
+        corridor_stops: List[str] = None
     ) -> SurgeEvent:
         """
         Create a surge event for supervisor approval.
         
         Args:
-            stop_id: Stop ID where surge detected
+            stop_id: Primary stop ID where surge detected (stop with most pings)
             route_ids: List of route IDs for this corridor
             pings: List of pings in this surge
+            corridor_stops: List of all stop IDs in this corridor (optional)
         
         Returns:
             Created SurgeEvent
         """
         
-        # Check if surge already exists for this stop (idempotency)
-        existing_surge = self.db.query(SurgeEvent).filter(
-            and_(
-                SurgeEvent.stop_id == stop_id,
-                SurgeEvent.status == 'pending',
-                SurgeEvent.detected_at >= datetime.utcnow() - timedelta(minutes=10)
-            )
-        ).first()
-        
-        if existing_surge:
-            logger.info(f"Surge already exists for stop {stop_id}")
-            return existing_surge
+        # Check if surge already exists for this route (idempotency)
+        # Check by route instead of stop for corridor-based clustering
+        if route_ids:
+            existing_surge = self.db.query(SurgeEvent).filter(
+                and_(
+                    SurgeEvent.route_ids.contains(route_ids),
+                    SurgeEvent.status == 'pending',
+                    SurgeEvent.detected_at >= datetime.utcnow() - timedelta(minutes=10)
+                )
+            ).first()
+            
+            if existing_surge:
+                logger.info(f"Surge already exists for route {route_ids[0]}")
+                return existing_surge
         
         # Create surge event
         ping_ids = [ping.ping_id for ping in pings]
