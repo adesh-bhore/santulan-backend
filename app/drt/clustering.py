@@ -394,17 +394,23 @@ class ClusteringService:
         # Check if surge already exists for this route (idempotency)
         # Check by route instead of stop for corridor-based clustering
         if route_ids:
+            # For JSONB columns, we need to check if arrays overlap
+            # Use @> operator to check if route_ids contains any of our routes
+            from sqlalchemy.dialects.postgresql import ARRAY
+            from sqlalchemy import cast, String
+            
             existing_surge = self.db.query(SurgeEvent).filter(
                 and_(
-                    SurgeEvent.route_ids.contains(route_ids),
                     SurgeEvent.status == 'pending',
                     SurgeEvent.detected_at >= datetime.utcnow() - timedelta(minutes=10)
                 )
-            ).first()
+            ).all()
             
-            if existing_surge:
-                logger.info(f"Surge already exists for route {route_ids[0]}")
-                return existing_surge
+            # Check manually if any existing surge has overlapping routes
+            for surge in existing_surge:
+                if surge.route_ids and any(r in surge.route_ids for r in route_ids):
+                    logger.info(f"Surge already exists for route {route_ids[0]}")
+                    return surge
         
         # Create surge event
         ping_ids = [ping.ping_id for ping in pings]
