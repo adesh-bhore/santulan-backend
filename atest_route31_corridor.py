@@ -539,10 +539,38 @@ def main():
     
     print_route_info()
     
-    input("Press Enter to start...")
-    
     try:
         db = next(get_db())
+        
+        # STEP 0: CLEANUP OLD DATA FIRST
+        print_header("STEP 0: Cleaning Up Old Test Data")
+        
+        # Delete old test pings
+        deleted_pings = db.execute(text("""
+            DELETE FROM commuter_pings 
+            WHERE commuter_id IN (
+                SELECT commuter_id FROM commuters WHERE phone LIKE '900000%'
+            )
+        """)).rowcount
+        
+        # Delete ALL pending surges (to avoid conflicts)
+        deleted_surges = db.execute(text("""
+            DELETE FROM surge_events WHERE status = 'pending'
+        """)).rowcount
+        
+        # Delete old test commuters
+        deleted_commuters = db.execute(text("""
+            DELETE FROM commuters WHERE phone LIKE '900000%'
+        """)).rowcount
+        
+        db.commit()
+        
+        print(f"\n✓ Cleaned up {deleted_pings} old pings")
+        print(f"✓ Cleaned up {deleted_surges} old pending surges")
+        print(f"✓ Cleaned up {deleted_commuters} old commuters")
+        print("\n✓ Database ready for fresh test\n")
+        
+        input("Press Enter to continue...")
         
         # Calculate total commuters needed
         total_route31 = sum(stop['ping_count'] for stop in ROUTE_31_STOPS)
